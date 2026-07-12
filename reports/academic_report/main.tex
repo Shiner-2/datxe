@@ -1,0 +1,474 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+
+\geometry{left=3cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!60!black
+}
+\setlist[itemize]{leftmargin=1.2cm}
+\setlist[enumerate]{leftmargin=1.2cm}
+\renewcommand{\arraystretch}{1.2}
+\emergencystretch=3em
+
+\title{\textbf{Báo cáo học thuật dự án DatXe}\\[0.4cm]
+\large Phân tích giá động và hành vi chấp nhận chuyến đi trong nền tảng gọi xe}
+\author{Dự án DatXe}
+\date{\today}
+
+\begin{document}
+
+\pagenumbering{gobble}
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    {\Large \textbf{BÁO CÁO HỌC THUẬT}}\\[1.0cm]
+    {\Huge \textbf{DATXE}}\\[0.35cm]
+    {\LARGE Phân tích giá động và hành vi chấp nhận chuyến đi trong nền tảng gọi xe}\\[1.5cm]
+    \rule{0.78\textwidth}{0.5pt}\\[0.6cm]
+    {\large Dynamic Pricing, Price Acceptance, Synthetic Data, Regression Modeling}\\[0.6cm]
+    \rule{0.78\textwidth}{0.5pt}\\[2.0cm]
+    \begin{flushleft}
+        \large
+        \textbf{Phạm vi báo cáo:} Tổng hợp đề bài, phương pháp xây dựng dữ liệu, triển khai mô hình, kết quả thực nghiệm và khuyến nghị chính sách.\\[0.3cm]
+        \textbf{Nguồn dữ liệu:} Dữ liệu tổng hợp trong thư mục \texttt{data/}.\\[0.3cm]
+        \textbf{Mã nguồn:} Các script trong \texttt{src/}, notebook trong \texttt{notebooks/}, kiểm thử trong \texttt{tests/}.
+    \end{flushleft}
+    \vfill
+    {\large \today}
+\end{titlepage}
+
+\clearpage
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\chapter*{Tóm tắt}
+\addcontentsline{toc}{chapter}{Tóm tắt}
+
+Dự án DatXe nghiên cứu bài toán định giá động trong một nền tảng gọi xe công nghệ. Trong bối cảnh thực tế, nền tảng phải đồng thời cân bằng hai nhóm tác nhân có động cơ khác nhau: khách hàng muốn giá thấp và khả năng có xe cao, trong khi tài xế chỉ sẵn sàng nhận chuyến nếu thù lao đủ bù đắp chi phí thời gian, quãng đường, thời tiết xấu và tắc nghẽn giao thông. Vì vậy, bài toán không chỉ là dự đoán giá, mà còn là tối ưu hóa xác suất ghép nối giữa cung và cầu.
+
+Do không sử dụng dữ liệu thương mại thật, dự án xây dựng hai bộ dữ liệu synthetic gồm 5.000 dòng cho phía tài xế và 5.000 dòng cho phía khách hàng. Mỗi bộ dữ liệu mô phỏng thông tin chuyến đi, tọa độ điểm đi--đến, khu vực, thời gian, quãng đường, thời lượng, mưa, giờ cao điểm, giá cơ sở, phụ phí và biến nhị phân thể hiện hành vi chấp nhận chuyến. Phương pháp phân tích chính gồm hồi quy tuyến tính để bóc tách cấu trúc phụ phí, hồi quy logistic để mô hình hóa xác suất chấp nhận, so sánh mô hình theo train/test split, và grid search để tìm cặp giá tối ưu giữa giá thu khách hàng và giá trả tài xế.
+
+Kết quả cho thấy hệ thống sinh dữ liệu khôi phục được các quy luật kinh tế học cốt lõi. Phía khách hàng có hệ số giá âm, nghĩa là giá tăng làm xác suất đặt xe giảm. Tuy nhiên, biến mưa và giờ cao điểm có tác động dương, phản ánh nhu cầu thiếu co giãn trong các hoàn cảnh cấp thiết. Phía tài xế có hệ số giá dương, nghĩa là thù lao cao làm xác suất nhận chuyến tăng, nhưng mưa và giờ cao điểm là lực cản vận hành. Từ đó, dự án đề xuất chính sách định giá theo ngữ cảnh, surge pricing trong mưa/cao điểm, trợ giá chéo và cá nhân hóa voucher.
+
+\chapter{Giới thiệu bài toán}
+
+\section{Bối cảnh}
+
+Các nền tảng gọi xe hoạt động như thị trường hai phía. Một giao dịch thành công chỉ xảy ra khi khách hàng chấp nhận mức giá được đề xuất và tài xế đồng ý thực hiện chuyến đi. Trong thực tế, hai quyết định này chịu ảnh hưởng bởi nhiều yếu tố: quãng đường, thời lượng, thời tiết, giờ cao điểm, khu vực xuất phát, khu vực kết thúc và đặc điểm riêng của từng người dùng hoặc tài xế.
+
+Định giá động là cơ chế điều chỉnh giá theo bối cảnh thị trường nhằm cân bằng cung--cầu. Nếu giá quá thấp trong điều kiện xấu, tài xế có thể không nhận chuyến, làm tỷ lệ ghép nối giảm. Nếu giá quá cao trong điều kiện bình thường, khách hàng có thể rời bỏ nền tảng. Vì vậy, giá tối ưu cần xét đồng thời phản ứng của cả hai phía.
+
+\section{Đề bài và mục tiêu nghiên cứu}
+
+Dự án đặt ra bài toán: xây dựng một hệ thống mô phỏng, phân tích và tối ưu hóa giá động cho nền tảng gọi xe dựa trên dữ liệu tổng hợp. Các mục tiêu cụ thể gồm:
+
+\begin{enumerate}
+    \item Sinh dữ liệu synthetic phản ánh các yếu tố vận hành chính của chuyến xe: thời gian, khoảng cách, mưa, giờ cao điểm, khu vực và hiệu ứng cá nhân.
+    \item Phân tích cấu trúc giá bằng hồi quy tuyến tính, đặc biệt là phần phụ phí do mưa và giờ cao điểm.
+    \item Mô hình hóa hành vi chấp nhận của khách hàng và tài xế bằng hồi quy logistic.
+    \item Tối ưu hóa cặp giá thu khách hàng và trả tài xế nhằm tối đa hóa lợi nhuận kỳ vọng.
+    \item Rút ra khuyến nghị chính sách từ kết quả định lượng.
+\end{enumerate}
+
+\section{Đóng góp của dự án}
+
+Dự án có ba đóng góp chính. Thứ nhất, dự án tạo được một pipeline dữ liệu có kiểm soát, có thể tái lập bằng seed và có kiểm thử tự động. Thứ hai, dự án mô hình hóa riêng hai phía thị trường, tránh giả định đơn giản rằng tăng giá luôn làm lợi cho nền tảng. Thứ ba, dự án chuyển kết quả phân tích thành bài toán tối ưu hóa vận hành thông qua hàm lợi nhuận kỳ vọng.
+
+\chapter{Cơ sở lý thuyết}
+
+\section{Định giá động trong thị trường hai phía}
+
+Trong thị trường gọi xe, nền tảng không trực tiếp tạo ra chuyến đi mà điều phối tương tác giữa khách hàng và tài xế. Giá có hai vai trò: là chi phí đối với khách hàng và là phần thưởng đối với tài xế. Do đó, cùng một thay đổi giá có thể tạo tác động trái chiều: tăng giá làm khách hàng kém sẵn sàng đặt xe nhưng làm tài xế có động lực nhận chuyến hơn.
+
+Một chính sách giá tốt cần tối đa hóa mục tiêu tổng hợp, ví dụ lợi nhuận kỳ vọng, thay vì chỉ tối đa hóa xác suất chấp nhận của một phía. Điều này dẫn đến công thức tổng quát:
+
+\begin{equation}
+    \mathbb{E}[\text{Profit}] = (P_{cust} - P_{driver}) \times P(\text{match}),
+\end{equation}
+
+trong đó $P_{cust}$ là giá thu từ khách hàng, $P_{driver}$ là khoản trả cho tài xế, và $P(\text{match})$ là xác suất chuyến đi được ghép nối thành công.
+
+\section{Hồi quy tuyến tính cho cấu trúc giá}
+
+Hồi quy tuyến tính được sử dụng để ước lượng tác động của các biến bối cảnh lên phụ phí $\Delta P$. Mô hình cơ sở có dạng:
+
+\begin{equation}
+    \Delta P_i = \beta_0 + \beta_1 \text{rain}_i + \beta_2 \text{rush\_hour}_i + \varepsilon_i.
+\end{equation}
+
+Trong đó $\beta_0$ biểu diễn phụ phí nền, $\beta_1$ là tác động của mưa, $\beta_2$ là tác động của giờ cao điểm. Các mô hình mở rộng thêm biến khu vực và định danh tài xế/khách hàng nhằm kiểm tra tác động không quan sát được của từng nhóm.
+
+\section{Hồi quy logistic cho hành vi chấp nhận}
+
+Biến mục tiêu chấp nhận chuyến là biến nhị phân, nên hồi quy logistic phù hợp hơn hồi quy tuyến tính. Xác suất chấp nhận được mô hình hóa bởi hàm sigmoid:
+
+\begin{equation}
+    P(y_i=1) = \sigma(z_i) = \frac{1}{1 + e^{-z_i}}.
+\end{equation}
+
+Với phía khách hàng, $z_i$ phụ thuộc vào giá cuối cùng, mưa và giờ cao điểm:
+
+\begin{equation}
+    z_i = \alpha_0 + \alpha_{price} \text{final\_price}_i + \alpha_{rain}\text{rain}_i + \alpha_{rush}\text{rush\_hour}_i + u_i.
+\end{equation}
+
+Với phía tài xế, mô hình có cấu trúc tương tự nhưng kỳ vọng dấu hệ số khác nhau. Hệ số giá của khách hàng kỳ vọng âm, còn hệ số giá của tài xế kỳ vọng dương.
+
+\section{Grid search cho tối ưu hóa giá}
+
+Grid search là phương pháp duyệt hữu hạn các cặp giá ứng viên. Với mỗi cặp $(P_{cust}, P_{driver})$, mô hình logistic ước lượng xác suất khách hàng đặt xe và xác suất tài xế nhận chuyến. Xác suất match có thể được xấp xỉ bằng tích hai xác suất này:
+
+\begin{equation}
+    P(\text{match}) \approx P(\text{customer accepts}) \times P(\text{driver accepts}).
+\end{equation}
+
+Sau đó, hệ thống chọn cặp giá có lợi nhuận kỳ vọng cao nhất trong từng ngữ cảnh.
+
+\chapter{Dữ liệu synthetic}
+
+\section{Tổng quan dữ liệu}
+
+Dự án sử dụng hai tệp dữ liệu chính: \path{driver_synthetic_trips.csv} và \path{customer_synthetic_trips.csv}. Hai bộ dữ liệu có cấu trúc tương tự để thuận tiện so sánh nhưng khác nhau ở định danh tác nhân và biến mục tiêu chấp nhận.
+
+\begin{table}[H]
+\centering
+\caption{Tổng quan hai bộ dữ liệu}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Bộ dữ liệu} & \textbf{Số dòng} & \textbf{Số cột} & \textbf{Số tác nhân} \\
+\midrule
+Tài xế & 5.000 & 18 & 50 tài xế \\
+Khách hàng & 5.000 & 18 & 200 khách hàng \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Các biến chính gồm: mã chuyến đi, mã tài xế hoặc khách hàng, thời điểm chuyến đi, khu vực đi--đến, tọa độ, quãng đường, thời lượng, biến mưa, biến giờ cao điểm, giá cơ sở, phụ phí, giá cuối cùng, xác suất chấp nhận và nhãn chấp nhận thực tế.
+
+\section{Quy trình sinh dữ liệu}
+
+Mỗi chuyến đi được sinh theo các bước sau:
+
+\begin{enumerate}
+    \item Lấy mẫu tác nhân: tài xế hoặc khách hàng.
+    \item Lấy mẫu bối cảnh thời tiết và thời gian, trong đó giờ cao điểm gồm các giờ 7, 8, 9, 16, 17, 18.
+    \item Sinh tọa độ điểm đi và điểm đến trên lưới 10 x 10, đồng thời loại bỏ các chuyến quá ngắn dưới 0,5 km.
+    \item Tính quãng đường Euclid và suy ra thời lượng chuyến đi.
+    \item Tính giá cơ sở từ quãng đường và thời lượng.
+    \item Sinh phụ phí từ mưa, giờ cao điểm, hiệu ứng khu vực, hiệu ứng cá nhân và nhiễu ngẫu nhiên.
+    \item Tính giá cuối cùng và xác suất chấp nhận bằng mô hình logistic.
+\end{enumerate}
+
+Giá cơ sở được định nghĩa bởi:
+
+\begin{equation}
+    \text{base\_price} = 10000 + 6000 \times \text{distance\_km} + 500 \times \text{duration\_minute}.
+\end{equation}
+
+Phụ phí có dạng tổng quát:
+
+\begin{equation}
+    \Delta P = 2000 + 8000 \times \text{rain} + 12000 \times \text{rush\_hour} + \text{effects} + \varepsilon.
+\end{equation}
+
+\section{Thống kê mô tả}
+
+\begin{table}[H]
+\centering
+\caption{Thống kê mô tả chính}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Chỉ tiêu} & \textbf{Tài xế} & \textbf{Khách hàng} \\
+\midrule
+Tỷ lệ mưa & 24,72\% & 28,06\% \\
+Tỷ lệ giờ cao điểm & 27,34\% & 29,86\% \\
+Giá cuối cùng trung bình & 58.020 VND & 58.905 VND \\
+Trung vị giá cuối cùng & 57.520 VND & 58.032 VND \\
+Giá nhỏ nhất & 10.309 VND & 11.349 VND \\
+Giá lớn nhất & 128.209 VND & 128.866 VND \\
+Tỷ lệ chấp nhận & 40,06\% & 74,22\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Tỷ lệ chấp nhận của khách hàng cao hơn tài xế do cách thiết kế mô phỏng: khách hàng vẫn có nhu cầu di chuyển trong điều kiện bất lợi, trong khi tài xế chịu trực tiếp chi phí vận hành của mưa và tắc đường.
+
+\section{Bảng biến}
+
+\begin{longtable}{p{5.8cm}p{8.6cm}}
+\caption{Các biến chính trong dữ liệu}\\
+\toprule
+\textbf{Biến} & \textbf{Ý nghĩa} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Biến} & \textbf{Ý nghĩa} \\
+\midrule
+\endhead
+\texttt{trip\_id} & Định danh duy nhất của chuyến đi. \\
+\texttt{driver\_id}, \texttt{customer\_id} & Định danh tác nhân ở hai bộ dữ liệu. \\
+\texttt{trip\_time} & Thời điểm chuyến đi, dùng để xác định giờ cao điểm. \\
+\texttt{origin\_zone}, \texttt{destination\_zone} & Khu vực xuất phát và kết thúc. \\
+\texttt{origin\_x}, \texttt{origin\_y}, \texttt{destination\_x}, \texttt{destination\_y} & Tọa độ mô phỏng trên lưới không gian. \\
+\texttt{distance\_km} & Quãng đường Euclid giữa điểm đi và điểm đến. \\
+\texttt{duration\_minute} & Thời lượng chuyến đi, phụ thuộc vào quãng đường, mưa và giờ cao điểm. \\
+\texttt{rain} & Biến nhị phân: 1 nếu trời mưa, 0 nếu không. \\
+\texttt{rush\_hour} & Biến nhị phân: 1 nếu thuộc giờ cao điểm, 0 nếu không. \\
+\texttt{base\_price} & Giá cơ sở trước phụ phí. \\
+\texttt{delta\_price} & Phụ phí do bối cảnh, khu vực, cá nhân và nhiễu. \\
+\texttt{final\_price} & Giá cuối cùng, bằng \texttt{base\_price + delta\_price}. \\
+\texttt{driver\_accept\_prob}, \texttt{customer\_accept\_prob} & Xác suất chấp nhận sinh từ mô hình logistic. \\
+\texttt{driver\_accept}, \texttt{customer\_accept} & Nhãn chấp nhận thực tế, lấy mẫu Bernoulli từ xác suất chấp nhận. \\
+\bottomrule
+\end{longtable}
+
+\chapter{Phương pháp triển khai}
+
+\section{Cấu trúc dự án}
+
+Dự án được tổ chức theo pipeline phân tích dữ liệu tiêu chuẩn:
+
+\begin{itemize}
+    \item \texttt{src/}: chứa script sinh dữ liệu và script tạo notebook.
+    \item \texttt{data/}: chứa hai bộ dữ liệu synthetic đã sinh.
+    \item \texttt{notebooks/}: chứa các phân tích hồi quy, hành vi chấp nhận và tối ưu hóa giá.
+    \item \texttt{tests/}: chứa kiểm thử schema, công thức sinh dữ liệu, tính tái lập và hành vi mô hình.
+    \item \texttt{docs/}: chứa tài liệu khuyến nghị chính sách và ghi chú thiết kế.
+\end{itemize}
+
+\section{Kiểm thử dữ liệu}
+
+Các kiểm thử tự động xác nhận những tính chất sau:
+
+\begin{enumerate}
+    \item Dữ liệu có đúng schema kỳ vọng, không có giá trị thiếu và có số dòng đúng.
+    \item Script sinh dữ liệu có tính deterministic khi dùng cùng seed.
+    \item Biến \texttt{rush\_hour} khớp với giờ trong \texttt{trip\_time}.
+    \item Công thức quãng đường, giá cơ sở và giá cuối cùng được tính đúng.
+    \item Hồi quy tuyến tính khôi phục được xấp xỉ các hệ số phụ phí đã cài đặt.
+    \item Hồi quy logistic khôi phục được dấu hệ số kỳ vọng của khách hàng và tài xế.
+\end{enumerate}
+
+\section{Thiết kế thực nghiệm}
+
+Quy trình thực nghiệm gồm bốn nhóm notebook:
+
+\begin{enumerate}
+    \item \texttt{driver\_price\_acceptance.ipynb}: phân tích dữ liệu tài xế, ước lượng phụ phí và so sánh mô hình mở rộng.
+    \item \texttt{customer\_price\_acceptance.ipynb}: phân tích đường cầu và xác suất đặt xe của khách hàng.
+    \item \texttt{optimize\_betas\_4\_contexts.ipynb}: so sánh mô hình phụ phí độc lập với mô hình theo 4 ngữ cảnh.
+    \item \texttt{dynamic\_pricing\_optimization.ipynb}: huấn luyện mô hình chấp nhận và dùng grid search để tối ưu hóa lợi nhuận kỳ vọng.
+\end{enumerate}
+
+Với bài toán dự đoán phụ phí, dự án dùng train/test split theo thời gian để mô phỏng tình huống dự đoán trên dữ liệu tương lai. Với bài toán phân loại chấp nhận, ROC AUC được dùng để đánh giá khả năng phân biệt giữa chấp nhận và không chấp nhận.
+
+\chapter{Kết quả thực nghiệm}
+
+\section{Kết quả phía tài xế}
+
+Mô hình hồi quy tuyến tính cơ sở ước lượng các hệ số phụ phí gần với giá trị thật đã dùng khi sinh dữ liệu. Kết quả từ notebook cho thấy:
+
+\begin{table}[H]
+\centering
+\caption{Hệ số phụ phí phía tài xế}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Thành phần} & \textbf{Ước lượng} & \textbf{Giá trị sinh dữ liệu} \\
+\midrule
+$\beta_0$ -- phụ phí nền & 2.017 VND & 2.000 VND \\
+$\beta_1$ -- tác động mưa & 7.925 VND & 8.000 VND \\
+$\beta_2$ -- tác động giờ cao điểm & 11.828 VND & 12.000 VND \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Mô hình cơ sở đạt $R^2 \approx 0,748$. Khi thêm biến khu vực và hiệu ứng tài xế, mô hình M2 đạt RMSE khoảng 2.980 VND và $R^2 \approx 0,833$ trên tập kiểm tra. Điều này cho thấy các đặc trưng không gian và cá nhân giúp giải thích thêm phần biến thiên của phụ phí.
+
+Về hành vi chấp nhận, tài xế có tỷ lệ nhận chuyến trung bình 40,06\%. Hồi quy logistic khôi phục được dấu hệ số như kỳ vọng: giá cuối cùng có tác động dương, còn mưa và giờ cao điểm có tác động âm. Nói cách khác, tài xế cần được bù đắp bằng thù lao cao hơn khi điều kiện vận hành xấu đi.
+
+\begin{table}[H]
+\centering
+\caption{Tỷ lệ nhận chuyến của tài xế theo ngữ cảnh}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Ngữ cảnh} & \textbf{Giá TB} & \textbf{Tỷ lệ nhận} & \textbf{Số mẫu} \\
+\midrule
+Không mưa -- bình thường & 51.495 & 43,98\% & 2.767 \\
+Không mưa -- cao điểm & 67.327 & 40,12\% & 997 \\
+Mưa -- bình thường & 60.539 & 31,87\% & 866 \\
+Mưa -- cao điểm & 75.843 & 29,73\% & 370 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Bảng trên cho thấy giá cao hơn chưa đủ để triệt tiêu hoàn toàn bất tiện của mưa và cao điểm. Đây là lý do nền tảng cần thiết kế phần trả cho tài xế riêng biệt, thay vì chỉ tối ưu giá thu từ khách hàng.
+
+\section{Kết quả phía khách hàng}
+
+Ở phía khách hàng, mô hình hồi quy tuyến tính cũng khôi phục được phụ phí gần đúng với tham số sinh dữ liệu:
+
+\begin{table}[H]
+\centering
+\caption{Hệ số phụ phí phía khách hàng}
+\begin{tabular}{lr}
+\toprule
+\textbf{Thành phần} & \textbf{Ước lượng} \\
+\midrule
+$\beta_0$ -- phụ phí nền & 1.938 VND \\
+$\beta_1$ -- tác động mưa & 7.906 VND \\
+$\beta_2$ -- tác động giờ cao điểm & 12.110 VND \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Hồi quy logistic cho thấy hệ số giá của khách hàng mang dấu âm, đúng với đường cầu dốc xuống: khi giá cuối cùng tăng, xác suất đặt xe giảm. Tuy nhiên, hệ số mưa và giờ cao điểm mang dấu dương, thể hiện nhu cầu cấp thiết hơn trong điều kiện bất lợi. Tỷ lệ chấp nhận trung bình đạt 74,22\%.
+
+\begin{table}[H]
+\centering
+\caption{Tỷ lệ đặt xe của khách hàng theo ngữ cảnh}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Ngữ cảnh} & \textbf{Giá TB} & \textbf{Tỷ lệ đặt} & \textbf{Số mẫu} \\
+\midrule
+Không mưa -- bình thường & 51.249 & 69,49\% & 2.566 \\
+Không mưa -- cao điểm & 66.605 & 73,04\% & 1.031 \\
+Mưa -- bình thường & 61.403 & 82,47\% & 941 \\
+Mưa -- cao điểm & 79.159 & 86,36\% & 462 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Kết quả này phản ánh cầu thiếu co giãn trong mưa và giờ cao điểm. Khách hàng trong các ngữ cảnh này chấp nhận giá cao hơn vì chi phí cơ hội của việc không có xe lớn hơn.
+
+\section{Mô hình 4 ngữ cảnh}
+
+Notebook tối ưu beta theo 4 ngữ cảnh so sánh hai cách mô hình hóa phụ phí: mô hình cộng dồn độc lập và mô hình tương tác theo từng ngữ cảnh. Bốn ngữ cảnh gồm: không mưa--bình thường, mưa--bình thường, không mưa--cao điểm, mưa--cao điểm.
+
+\begin{table}[H]
+\centering
+\caption{Phụ phí trung bình thực tế theo 4 ngữ cảnh}
+\begin{tabular}{lr}
+\toprule
+\textbf{Ngữ cảnh} & \textbf{Delta price trung bình} \\
+\midrule
+Không mưa -- bình thường & 2.026 VND \\
+Mưa -- bình thường & 9.915 VND \\
+Không mưa -- cao điểm & 13.821 VND \\
+Mưa -- cao điểm & 21.835 VND \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Mô hình tương tác khớp chính xác trung bình từng nhóm, trong khi mô hình độc lập cho kết quả rất gần do dữ liệu được sinh theo cấu trúc gần tuyến tính. Ý nghĩa thực tiễn là nền tảng có thể dùng bảng giá theo ngữ cảnh để dễ diễn giải và triển khai trong hệ thống vận hành.
+
+\section{Tối ưu hóa giá động}
+
+Notebook tối ưu hóa huấn luyện hai mô hình logistic và đánh giá trên tập kiểm tra. ROC AUC đạt 0,6749 cho khách hàng và 0,6770 cho tài xế, vượt ngưỡng kiểm tra tối thiểu 0,55. Sau đó, grid search được dùng để quét các cặp giá thu khách hàng và trả tài xế trong từng ngữ cảnh.
+
+Hàm mục tiêu là:
+
+\begin{equation}
+    \mathbb{E}[\text{Profit}] = (P_{cust} - P_{driver}) \times P_{cust\_accept} \times P_{driver\_accept}.
+\end{equation}
+
+Kết quả định tính quan trọng là giá tối ưu không chỉ đẩy giá thu lên cao, mà còn cần tăng khoản trả cho tài xế trong mưa và cao điểm để bảo vệ xác suất match. Theo README của dự án, với chuyến xe chuẩn có giá cơ sở 40.000 VND, ngữ cảnh bình thường có thể tối ưu quanh mức thu khách hàng 47.000 VND và trả tài xế 38.000 VND. Trong ngữ cảnh mưa cộng cao điểm, mức thu có thể tăng lên khoảng 87.000 VND và mức trả tài xế khoảng 78.000 VND, giữ biên lợi nhuận khoảng 9.000 VND nhưng cải thiện đáng kể khả năng có tài xế nhận chuyến.
+
+\chapter{Thảo luận}
+
+\section{Diễn giải kết quả}
+
+Dự án minh họa rõ mâu thuẫn kinh tế trong định giá gọi xe. Một chính sách giá thấp có thể giữ khách hàng nhưng làm thiếu tài xế. Một chính sách giá cao có thể thu hút tài xế nhưng làm giảm cầu trong điều kiện bình thường. Do đó, chính sách tối ưu phải phụ thuộc vào ngữ cảnh.
+
+Trong điều kiện mưa hoặc giờ cao điểm, khách hàng ít nhạy cảm với giá hơn vì nhu cầu di chuyển trở nên cấp thiết. Ngược lại, tài xế lại chịu chi phí vận hành cao hơn, nên cần được bù đắp. Surge pricing vì vậy không chỉ là cơ chế tăng doanh thu, mà còn là cơ chế cân bằng cung--cầu.
+
+\section{Ý nghĩa quản trị}
+
+Từ góc nhìn vận hành, kết quả gợi ý bốn chính sách:
+
+\begin{enumerate}
+    \item \textbf{Áp dụng surge pricing trong điều kiện bất lợi.} Khi mưa hoặc cao điểm, tăng giá không nhất thiết làm mất nhiều khách hàng, nhưng lại giúp duy trì nguồn cung tài xế.
+    \item \textbf{Định giá theo ngữ cảnh.} Thay vì một công thức tuyến tính duy nhất, nền tảng có thể dùng ma trận giá cho bốn tổ hợp mưa và cao điểm.
+    \item \textbf{Trợ giá chéo.} Lợi nhuận từ các chuyến có nhu cầu cao có thể được dùng để thưởng tài xế ở các khung giờ thấp điểm.
+    \item \textbf{Cá nhân hóa voucher.} Những khách hàng nhạy cảm giá nên được ưu tiên voucher, thay vì phát đại trà cho toàn bộ khách hàng.
+\end{enumerate}
+
+\section{Hạn chế}
+
+Dự án có một số hạn chế. Thứ nhất, dữ liệu là synthetic nên không chứa toàn bộ độ phức tạp của thị trường thật như cạnh tranh giữa nền tảng, hành vi hủy chuyến sau khi đặt, thời gian chờ, khoảng cách tài xế đến điểm đón hoặc giới hạn cung theo khu vực. Thứ hai, mô hình logistic tuyến tính theo đặc trưng đầu vào nên chưa nắm bắt các quan hệ phi tuyến phức tạp. Thứ ba, grid search là phương pháp dễ hiểu nhưng có thể kém hiệu quả khi không gian quyết định lớn.
+
+\section{Hướng phát triển}
+
+Các hướng mở rộng gồm:
+
+\begin{itemize}
+    \item Bổ sung biến thời gian chờ, khoảng cách tài xế đến điểm đón và mật độ cung--cầu theo khu vực.
+    \item Thử mô hình phi tuyến như random forest, gradient boosting hoặc mô hình causal để đánh giá tác động giá.
+    \item Tối ưu hóa đa mục tiêu, cân bằng lợi nhuận, tỷ lệ match, trải nghiệm khách hàng và thu nhập tài xế.
+    \item Xây dựng mô phỏng thời gian thực, trong đó quyết định giá hiện tại ảnh hưởng đến trạng thái cung--cầu tương lai.
+\end{itemize}
+
+\chapter{Kết luận}
+
+Báo cáo đã tổng hợp toàn bộ dự án DatXe theo hướng học thuật: từ đề bài, cơ sở lý thuyết, quy trình sinh dữ liệu, phương pháp mô hình hóa đến kết quả thực nghiệm và khuyến nghị chính sách. Dự án chứng minh rằng dữ liệu synthetic có thể được thiết kế để kiểm tra các giả thuyết kinh tế học quan trọng trong định giá động.
+
+Kết quả chính cho thấy khách hàng và tài xế phản ứng trái chiều với giá. Khách hàng nhìn giá như chi phí nên xác suất đặt xe giảm khi giá tăng, nhưng nhu cầu trong mưa và cao điểm làm họ bớt nhạy cảm hơn. Tài xế nhìn giá như thù lao nên xác suất nhận chuyến tăng khi giá tăng, nhưng điều kiện vận hành xấu tạo tác động âm cần được bù đắp. Vì vậy, giá động hiệu quả cần tối ưu đồng thời hai phía, không chỉ tăng hoặc giảm giá một cách đơn giản.
+
+Từ góc độ ứng dụng, dự án đề xuất định giá theo ngữ cảnh, surge pricing trong điều kiện bất lợi, trợ giá chéo và cá nhân hóa voucher. Đây là các chính sách có thể giúp nền tảng vừa tăng lợi nhuận kỳ vọng, vừa duy trì tỷ lệ ghép nối và ổn định hệ sinh thái tài xế--khách hàng.
+
+\appendix
+\chapter{Phụ lục}
+
+\section{Cấu trúc thư mục chính}
+
+\begin{verbatim}
+data/
+  driver_synthetic_trips.csv
+  customer_synthetic_trips.csv
+docs/
+  superpowers/policy_recommendations.md
+notebooks/
+  driver_price_acceptance.ipynb
+  customer_price_acceptance.ipynb
+  optimize_betas_4_contexts.ipynb
+  dynamic_pricing_optimization.ipynb
+src/
+  generate_driver_data.py
+  generate_customer_data.py
+tests/
+  test_generate_driver_data.py
+  test_generate_customer_data.py
+\end{verbatim}
+
+\section{Lệnh chạy tham khảo}
+
+\begin{verbatim}
+python src/generate_driver_data.py
+python src/generate_customer_data.py
+pytest
+jupyter notebook notebooks/driver_price_acceptance.ipynb
+\end{verbatim}
+
+\section{Ghi chú về dữ liệu}
+
+Dữ liệu trong dự án là dữ liệu tổng hợp phục vụ học tập và minh họa phương pháp. Không nên sử dụng dữ liệu này cho quyết định thương mại thực tế nếu chưa kiểm định lại bằng dữ liệu vận hành thật.
+
+\end{document}
