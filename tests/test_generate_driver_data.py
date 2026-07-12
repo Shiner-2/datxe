@@ -23,6 +23,8 @@ EXPECTED_COLUMNS = [
     "base_price",
     "delta_price",
     "final_price",
+    "driver_accept_prob",
+    "driver_accept",
 ]
 
 RUSH_HOURS = {7, 8, 9, 16, 17, 18}
@@ -118,3 +120,24 @@ def test_extended_models_improve_price_prediction():
 
     assert rmse_m1 < rmse_m0
     assert rmse_m2 < rmse_m1
+
+
+def test_logistic_regression_recovers_driver_acceptance_behavior():
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import roc_auc_score
+    df = generate_driver_data(seed=42)
+    model = LogisticRegression(solver='lbfgs')
+    model.fit(df[["final_price", "rain", "rush_hour"]], df["driver_accept"])
+
+    alpha_price, alpha_rain, alpha_rush = model.coef_[0]
+
+    # Drivers prefer high prices
+    assert alpha_price > 0
+    
+    # Drivers hate rain or rush hour
+    assert alpha_rain < 0
+    assert alpha_rush < 0
+
+    pred_prob = model.predict_proba(df[["final_price", "rain", "rush_hour"]])[:, 1]
+    auc = roc_auc_score(df["driver_accept"], pred_prob)
+    assert auc > 0.55
