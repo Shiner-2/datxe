@@ -14,6 +14,7 @@
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{caption}
+\graphicspath{{figures/}}
 
 \geometry{left=3cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
 \hypersetup{
@@ -212,6 +213,24 @@ Tỷ lệ chấp nhận & 40,06\% & 74,22\% \\
 
 Tỷ lệ chấp nhận của khách hàng cao hơn tài xế do cách thiết kế mô phỏng: khách hàng vẫn có nhu cầu di chuyển trong điều kiện bất lợi, trong khi tài xế chịu trực tiếp chi phí vận hành của mưa và tắc đường.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{final_price_distribution.png}
+\caption{Phân phối giá cuối cùng của hai bộ dữ liệu. Hai phân phối có mặt bằng tương đồng, giúp so sánh hành vi khách hàng và tài xế trên cùng thang giá.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{trip_spatial_distribution.png}
+\caption{Phân bố tọa độ điểm đi và điểm đến trong dữ liệu synthetic. Các chuyến được lấy mẫu trên lưới không gian 10 x 10, tạo dữ liệu đủ đa dạng cho biến khu vực và quãng đường.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{distance_duration_relationship.png}
+\caption{Quan hệ giữa quãng đường và thời lượng chuyến đi. Đường xu hướng dương xác nhận thời lượng tăng theo khoảng cách, trong khi các ngữ cảnh mưa/cao điểm làm thời lượng phân tán cao hơn.}
+\end{figure}
+
 \section{Bảng biến}
 
 \begin{longtable}{p{5.8cm}p{8.6cm}}
@@ -303,6 +322,12 @@ $\beta_2$ -- tác động giờ cao điểm & 11.828 VND & 12.000 VND \\
 
 Mô hình cơ sở đạt $R^2 \approx 0,748$. Khi thêm biến khu vực và hiệu ứng tài xế, mô hình M2 đạt RMSE khoảng 2.980 VND và $R^2 \approx 0,833$ trên tập kiểm tra. Điều này cho thấy các đặc trưng không gian và cá nhân giúp giải thích thêm phần biến thiên của phụ phí.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\textwidth]{driver_model_comparison.png}
+\caption{So sánh các mô hình dự đoán phụ phí phía tài xế. Việc thêm khu vực và hiệu ứng tài xế làm giảm RMSE, đồng thời tăng khả năng giải thích trên tập kiểm tra.}
+\end{figure}
+
 Về hành vi chấp nhận, tài xế có tỷ lệ nhận chuyến trung bình 40,06\%. Hồi quy logistic khôi phục được dấu hệ số như kỳ vọng: giá cuối cùng có tác động dương, còn mưa và giờ cao điểm có tác động âm. Nói cách khác, tài xế cần được bù đắp bằng thù lao cao hơn khi điều kiện vận hành xấu đi.
 
 \begin{table}[H]
@@ -321,6 +346,18 @@ Mưa -- cao điểm & 75.843 & 29,73\% & 370 \\
 \end{table}
 
 Bảng trên cho thấy giá cao hơn chưa đủ để triệt tiêu hoàn toàn bất tiện của mưa và cao điểm. Đây là lý do nền tảng cần thiết kế phần trả cho tài xế riêng biệt, thay vì chỉ tối ưu giá thu từ khách hàng.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{acceptance_by_context.png}
+\caption{Tỷ lệ chấp nhận của khách hàng và tài xế theo bốn ngữ cảnh. Khách hàng chấp nhận cao hơn trong mưa/cao điểm, trong khi tài xế giảm tỷ lệ nhận do chi phí vận hành tăng.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{driver_supply_curves.png}
+\caption{Đường cung dự đoán của tài xế theo giá trả. Khi giá trả tăng, xác suất nhận chuyến tăng; các đường trong mưa/cao điểm nằm thấp hơn do điều kiện vận hành bất lợi.}
+\end{figure}
 
 \section{Kết quả phía khách hàng}
 
@@ -359,6 +396,18 @@ Mưa -- cao điểm & 79.159 & 86,36\% & 462 \\
 
 Kết quả này phản ánh cầu thiếu co giãn trong mưa và giờ cao điểm. Khách hàng trong các ngữ cảnh này chấp nhận giá cao hơn vì chi phí cơ hội của việc không có xe lớn hơn.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{customer_demand_curves.png}
+\caption{Đường cầu dự đoán của khách hàng theo giá thu. Xác suất đặt xe giảm khi giá tăng, nhưng các ngữ cảnh mưa/cao điểm dịch đường cầu lên trên do nhu cầu cấp thiết.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{acceptance_by_price_bin.png}
+\caption{Tỷ lệ chấp nhận theo khoảng giá. Đường của khách hàng thể hiện xu hướng giảm khi giá tăng, còn đường của tài xế phản ánh động lực nhận chuyến tốt hơn ở mức thù lao cao.}
+\end{figure}
+
 \section{Mô hình 4 ngữ cảnh}
 
 Notebook tối ưu beta theo 4 ngữ cảnh so sánh hai cách mô hình hóa phụ phí: mô hình cộng dồn độc lập và mô hình tương tác theo từng ngữ cảnh. Bốn ngữ cảnh gồm: không mưa--bình thường, mưa--bình thường, không mưa--cao điểm, mưa--cao điểm.
@@ -380,6 +429,12 @@ Mưa -- cao điểm & 21.835 VND \\
 
 Mô hình tương tác khớp chính xác trung bình từng nhóm, trong khi mô hình độc lập cho kết quả rất gần do dữ liệu được sinh theo cấu trúc gần tuyến tính. Ý nghĩa thực tiễn là nền tảng có thể dùng bảng giá theo ngữ cảnh để dễ diễn giải và triển khai trong hệ thống vận hành.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{delta_price_by_context.png}
+\caption{Phụ phí trung bình theo ngữ cảnh. Mưa và giờ cao điểm làm phụ phí tăng rõ rệt; tổ hợp mưa cộng cao điểm tạo mức phụ phí cao nhất.}
+\end{figure}
+
 \section{Tối ưu hóa giá động}
 
 Notebook tối ưu hóa huấn luyện hai mô hình logistic và đánh giá trên tập kiểm tra. ROC AUC đạt 0,6749 cho khách hàng và 0,6770 cho tài xế, vượt ngưỡng kiểm tra tối thiểu 0,55. Sau đó, grid search được dùng để quét các cặp giá thu khách hàng và trả tài xế trong từng ngữ cảnh.
@@ -391,6 +446,18 @@ Hàm mục tiêu là:
 \end{equation}
 
 Kết quả định tính quan trọng là giá tối ưu không chỉ đẩy giá thu lên cao, mà còn cần tăng khoản trả cho tài xế trong mưa và cao điểm để bảo vệ xác suất match. Theo README của dự án, với chuyến xe chuẩn có giá cơ sở 40.000 VND, ngữ cảnh bình thường có thể tối ưu quanh mức thu khách hàng 47.000 VND và trả tài xế 38.000 VND. Trong ngữ cảnh mưa cộng cao điểm, mức thu có thể tăng lên khoảng 87.000 VND và mức trả tài xế khoảng 78.000 VND, giữ biên lợi nhuận khoảng 9.000 VND nhưng cải thiện đáng kể khả năng có tài xế nhận chuyến.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{optimal_prices_by_context.png}
+\caption{Cặp giá tối ưu theo ngữ cảnh trong lưới giá khảo sát. Việc một số nghiệm chạm biên trên của lưới cho thấy bài toán tối ưu cần được ràng buộc thêm bằng chính sách trải nghiệm khách hàng, cạnh tranh hoặc trần giá thực tế.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{profit_heatmap.png}
+\caption{Heatmap lợi nhuận kỳ vọng trong ngữ cảnh mưa cộng cao điểm. Vùng màu đậm biểu diễn các cặp giá có lợi nhuận kỳ vọng cao hơn; dấu sao đánh dấu điểm tốt nhất trong lưới giá đang xét.}
+\end{figure}
 
 \chapter{Thảo luận}
 
