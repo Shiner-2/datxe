@@ -4,7 +4,7 @@ Dự án này là một hệ thống mô phỏng, phân tích, và tối ưu hó
 
 *Lưu ý: Đây là ví dụ xây dựng một dự án demo với dữ liệu synthetic, tài liệu chỉ được sử dụng để tham khảo, không nên sử dụng dữ liệu trong dự án này với mục đích thương mại.*
 
-📚 **Báo cáo Chi tiết**: Bạn có thể xem toàn bộ phương pháp luận, cơ sở toán học và đánh giá chuyên sâu của dự án tại Báo cáo Học thuật (PDF): **[reports/academic_report/main.pdf](reports/academic_report/main.pdf)**.
+📚 **Báo cáo Chi tiết**: Có thể xem toàn bộ phương pháp luận, cơ sở toán học và đánh giá chuyên sâu của dự án tại Báo cáo Học thuật (PDF): **[reports/academic_report/main.pdf](reports/academic_report/main.pdf)**.
 
 ---
 
