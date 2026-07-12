@@ -137,6 +137,24 @@ def generate_driver_data(n_samples: int = 5000, seed: int = 42, n_drivers: int =
     delta_price = np.round(delta_price, 0)
     final_price = base_price + delta_price
 
+    # Driver acceptance model
+    alpha0_driver = -2.5
+    alpha_price_driver = 0.00004  # Positive effect: Higher price -> Higher acceptance
+    alpha_rain_driver = -1.0      # Negative effect: Drivers hate rain
+    alpha_rush_driver = -0.8      # Negative effect: Drivers hate traffic
+    epsilon_accept_driver = rng.normal(loc=0, scale=0.5, size=n_samples)
+    
+    accept_logit_driver = (
+        alpha0_driver
+        + alpha_price_driver * final_price
+        + alpha_rain_driver * rain
+        + alpha_rush_driver * rush_hour
+        + np.array([driver_effects[d_id]/2000 for d_id in driver_ids])
+        + epsilon_accept_driver
+    )
+    driver_accept_prob = 1 / (1 + np.exp(-accept_logit_driver))
+    driver_accept = rng.binomial(1, driver_accept_prob)
+
     df = pd.DataFrame(
         {
             "trip_id": np.arange(1, n_samples + 1),
@@ -155,6 +173,8 @@ def generate_driver_data(n_samples: int = 5000, seed: int = 42, n_drivers: int =
             "base_price": base_price,
             "delta_price": delta_price,
             "final_price": final_price,
+            "driver_accept_prob": np.round(driver_accept_prob, 4),
+            "driver_accept": driver_accept,
         }
     )
     return df
