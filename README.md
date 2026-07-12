@@ -2,6 +2,8 @@
 
 Dự án này là một hệ thống mô phỏng, phân tích, và tối ưu hóa **Giá Động (Dynamic Pricing)** cho một nền tảng gọi xe công nghệ. Bằng cách xây dựng các bộ dữ liệu tổng hợp (Synthetic Data) và ứng dụng Khoa học Dữ liệu (Linear & Logistic Regression), dự án bóc tách được hành vi đối lập giữa Khách hàng và Tài xế, từ đó tìm ra điểm cân bằng mang lại lợi nhuận cao nhất cho nền tảng.
 
+*Lưu ý: Đây là ví dụ xây dựng một dự án demo với dữ liệu synthetic, tài liệu chỉ được sử dụng để tham khảo, không nên sử dụng dữ liệu trong dự án này với mục đích thương mại.*
+
 ---
 
 ## 🎯 1. Mục tiêu Dự án
