@@ -1,82 +1,120 @@
+import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
 
 from src.generate_driver_data import generate_driver_data
 
 
 EXPECTED_COLUMNS = [
     "trip_id",
+    "driver_id",
+    "trip_time",
+    "origin_zone",
+    "destination_zone",
+    "origin_x",
+    "origin_y",
+    "destination_x",
+    "destination_y",
+    "distance_km",
+    "duration_minute",
     "rain",
     "rush_hour",
     "base_price",
     "delta_price",
-    "price",
-    "driver_accept_prob",
-    "driver_accept",
+    "final_price",
 ]
 
+RUSH_HOURS = {7, 8, 9, 16, 17, 18}
 
-def test_generate_driver_data_has_expected_shape_and_columns():
-    df = generate_driver_data(n_samples=500, seed=123)
+
+def _fit_rmse(train, test, features):
+    train_x = pd.get_dummies(train[features], drop_first=True, dtype=float)
+    test_x = pd.get_dummies(test[features], drop_first=True, dtype=float)
+    test_x = test_x.reindex(columns=train_x.columns, fill_value=0)
+
+    model = LinearRegression()
+    model.fit(train_x, train["delta_price"])
+    predicted = model.predict(test_x)
+    return mean_squared_error(test["delta_price"], predicted) ** 0.5
+
+
+def test_default_dataset_matches_latest_synthetic_plan_schema():
+    df = generate_driver_data(seed=42)
 
     assert list(df.columns) == EXPECTED_COLUMNS
-    assert len(df) == 500
+    assert len(df) == 5000
     assert df.isna().sum().sum() == 0
     assert df["trip_id"].is_unique
+    assert df["driver_id"].nunique() == 50
 
 
 def test_generate_driver_data_is_deterministic_for_same_seed():
-    first = generate_driver_data(n_samples=250, seed=42)
-    second = generate_driver_data(n_samples=250, seed=42)
+    first = generate_driver_data(seed=42)
+    second = generate_driver_data(seed=42)
 
     pd.testing.assert_frame_equal(first, second)
 
 
-def test_binary_columns_only_contain_zero_or_one():
-    df = generate_driver_data(n_samples=500, seed=123)
+def test_trip_time_drives_rush_hour_flag():
+    df = generate_driver_data(seed=42)
+    hours = pd.to_datetime(df["trip_time"]).dt.hour
+    expected_rush_hour = hours.isin(RUSH_HOURS).astype(int)
 
-    for column in ["rain", "rush_hour", "driver_accept"]:
-        assert set(df[column].unique()).issubset({0, 1})
+    pd.testing.assert_series_equal(df["rush_hour"], expected_rush_hour, check_names=False)
 
 
-def test_price_identity_and_positive_values():
-    df = generate_driver_data(n_samples=500, seed=123)
+def test_distance_duration_base_and_final_price_formulas():
+    df = generate_driver_data(seed=42)
 
-    pd.testing.assert_series_equal(
-        df["price"],
-        df["base_price"] + df["delta_price"],
-        check_names=False,
+    expected_distance = np.sqrt(
+        (df["destination_x"] - df["origin_x"]) ** 2
+        + (df["destination_y"] - df["origin_y"]) ** 2
     )
-    assert (df["base_price"] > 0).all()
-    assert (df["delta_price"] > 0).all()
-    assert (df["price"] > df["base_price"]).all()
-    assert df["driver_accept_prob"].between(0, 1).all()
+    np.testing.assert_allclose(df["distance_km"], expected_distance, atol=0.01)
+    assert (df["distance_km"] >= 0.5).all()
+    assert (df["duration_minute"] >= 1).all()
+
+    expected_base = 10000 + 6000 * df["distance_km"] + 500 * df["duration_minute"]
+    np.testing.assert_allclose(df["base_price"], expected_base, atol=1.0)
+    np.testing.assert_allclose(df["final_price"], df["base_price"] + df["delta_price"], atol=1.0)
+    assert (df["final_price"] > 0).all()
 
 
-def test_linear_price_coefficients_are_positive_without_interaction():
-    df = generate_driver_data(n_samples=3000, seed=42)
+def test_each_driver_has_all_rain_and_rush_hour_groups():
+    df = generate_driver_data(seed=42)
+    counts = df.groupby(["driver_id", "rain", "rush_hour"]).size().unstack(["rain", "rush_hour"])
+
+    assert counts.notna().all().all()
+    assert (counts >= 1).all().all()
+
+
+def test_baseline_ols_recovers_rain_and_rush_hour_effects():
+    df = generate_driver_data(seed=42)
     model = LinearRegression()
     model.fit(df[["rain", "rush_hour"]], df["delta_price"])
 
-    rain_coef, rush_coef = model.coef_
-    assert rain_coef > 0
-    assert rush_coef > 0
-    assert 2500 <= rain_coef <= 4500
-    assert 3500 <= rush_coef <= 6000
+    beta0 = model.intercept_
+    beta1, beta2 = model.coef_
+
+    assert 1000 <= beta0 <= 3000
+    assert 6500 <= beta1 <= 9500
+    assert 10500 <= beta2 <= 13500
 
 
-def test_logistic_acceptance_price_coefficient_is_positive():
-    df = generate_driver_data(n_samples=3000, seed=42)
-    model = LogisticRegression(max_iter=1000)
-    model.fit(df[["price", "rain", "rush_hour"]], df["driver_accept"])
+def test_extended_models_improve_price_prediction():
+    df = generate_driver_data(seed=42).sort_values("trip_time")
+    split_index = int(len(df) * 0.8)
+    train = df.iloc[:split_index]
+    test = df.iloc[split_index:]
 
-    price_coef = model.coef_[0][0]
-    assert price_coef > 0
+    rmse_m0 = _fit_rmse(train, test, ["rain", "rush_hour"])
+    rmse_m1 = _fit_rmse(train, test, ["rain", "rush_hour", "origin_zone", "destination_zone"])
+    rmse_m2 = _fit_rmse(
+        train,
+        test,
+        ["rain", "rush_hour", "origin_zone", "destination_zone", "driver_id"],
+    )
 
-
-def test_acceptance_rate_increases_across_price_bins():
-    df = generate_driver_data(n_samples=3000, seed=42)
-    df = df.assign(price_bin=pd.qcut(df["price"], q=4, labels=False))
-    rates = df.groupby("price_bin", observed=True)["driver_accept"].mean()
-
-    assert rates.iloc[-1] > rates.iloc[0]
+    assert rmse_m1 < rmse_m0
+    assert rmse_m2 < rmse_m1
